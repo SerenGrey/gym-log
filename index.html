@@ -67,6 +67,11 @@ input:focus,select:focus,textarea:focus{outline:2px solid var(--accent);outline-
 #addSet{width:100%;margin-bottom:14px}
 .hint{font-size:.88rem;color:var(--muted);background:var(--surface-2);border-radius:10px;padding:10px 12px;margin:-4px 0 14px;display:flex;gap:10px;align-items:center;justify-content:space-between}
 .hint:empty{display:none}
+.copy-day{display:block;width:100%;text-align:left;background:none;border:0;border-top:1px solid var(--border);padding:12px 2px;font:inherit;color:var(--text);cursor:pointer}
+.copy-day:first-of-type{border-top:0}
+.copy-day:hover{background:var(--surface-2)}
+.copy-day strong{display:block}
+.copy-day span{display:block;color:var(--muted);font-size:.85rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .entry{display:flex;gap:8px;align-items:flex-start;padding:12px 0;border-top:1px solid var(--border)}
 .entry:first-of-type{border-top:0}
 .entry-main{flex:1;min-width:0}
@@ -183,6 +188,11 @@ nav button.on{color:var(--accent);font-weight:700}
       </div>
     </form>
     <h2 id="sessionHead">This session</h2>
+    <div id="copyArea">
+      <button type="button" class="btn ghost" id="copyBtn" style="width:100%;margin-bottom:10px">Copy a previous workout to this day</button>
+      <div class="card" id="copyPicker" hidden></div>
+      <div class="nudge" id="copyDone" hidden></div>
+    </div>
     <div class="card" id="sessionList"></div>
   </section>
 
@@ -665,6 +675,54 @@ function renderSession(){
   const pbs = pbIds();
   $('#sessionList').innerHTML = list.length ? list.map(e => entryHTML(e, pbs)).join('') : '<div class="empty">Nothing logged for this day yet.</div>';
 }
+/* ---------- Copy a whole previous workout ---------- */
+let lastCopy = null;
+const targetDay = () => ($('#fWhen').value || toLocalInput(new Date())).slice(0, 10);
+function renderCopyPicker(){
+  const target = targetDay();
+  const byDay = new Map();
+  for (const e of sortedAsc()) { const k = e.when.slice(0, 10); if (k === target) continue; if (!byDay.has(k)) byDay.set(k, []); byDay.get(k).push(e); }
+  const before = [...byDay.keys()].filter(k => k < target).sort().reverse();
+  const after = [...byDay.keys()].filter(k => k > target).sort();
+  const days = before.concat(after).slice(0, 14);
+  $('#copyPicker').innerHTML = days.length
+    ? '<div class="muted" style="margin-bottom:6px">Choose the workout to copy. Everything from that day is added to ' + (target === dayKey(new Date()) ? 'today' : fmtDay(new Date(target + 'T12:00'))) + ', ready to adjust.</div>' +
+      days.map(k => { const items = byDay.get(k); return `<button type="button" class="copy-day" data-copyday="${k}"><strong>${fmtDay(new Date(k + 'T12:00'), true)} · ${items.length} ${items.length === 1 ? 'exercise' : 'exercises'}</strong><span>${esc(items.map(x => x.exercise).join(', '))}</span></button>`; }).join('') +
+      '<button type="button" class="btn ghost small" id="copyCancel" style="margin-top:8px">Cancel</button>'
+    : '<div class="empty">No other workouts to copy yet.</div><button type="button" class="btn ghost small" id="copyCancel">Close</button>';
+}
+$('#copyBtn').addEventListener('click', () => {
+  const pk = $('#copyPicker');
+  if (pk.hidden) { renderCopyPicker(); pk.hidden = false; $('#copyDone').hidden = true; } else pk.hidden = true;
+});
+$('#copyPicker').addEventListener('click', e => {
+  if (e.target.closest('#copyCancel')) { $('#copyPicker').hidden = true; return; }
+  const b = e.target.closest('[data-copyday]'); if (!b) return;
+  const from = b.dataset.copyday, target = targetDay();
+  const src = sortedAsc().filter(x => x.when.slice(0, 10) === from);
+  const existing = db.entries.filter(x => x.when.slice(0, 10) === target).length;
+  if (existing && !confirm(`This day already has ${existing} ${existing === 1 ? 'exercise' : 'exercises'} logged. Add the copied ones as well?`)) return;
+  const ids = [];
+  for (const x of src) {
+    const c = JSON.parse(JSON.stringify(x));
+    c.id = uid(); c.when = target + x.when.slice(10); delete c.feel;
+    db.entries.push(c); ids.push(c.id);
+  }
+  save();
+  lastCopy = {ids, from};
+  $('#copyPicker').hidden = true;
+  $('#copyDone').innerHTML = `<span>Copied ${ids.length} ${ids.length === 1 ? 'exercise' : 'exercises'} from ${fmtDay(new Date(from + 'T12:00'))}. Tap the pencil on any of them to change weights or reps.</span><button type="button" class="btn small ghost" id="copyUndo">Undo</button>`;
+  $('#copyDone').hidden = false;
+  renderSession();
+});
+$('#copyDone').addEventListener('click', e => {
+  if (!e.target.closest('#copyUndo') || !lastCopy) return;
+  const ids = new Set(lastCopy.ids);
+  db.entries = db.entries.filter(x => !ids.has(x.id)); save();
+  lastCopy = null; $('#copyDone').hidden = true; toast('Copy undone'); renderSession();
+});
+$('#fWhen').addEventListener('change', () => { $('#copyPicker').hidden = true; $('#copyDone').hidden = true; lastCopy = null; });
+
 function renderLog(){
   if (!$('#fWhen').value) $('#fWhen').value = toLocalInput(new Date());
   renderTypeChips(); renderFeelChips(); applyFields();

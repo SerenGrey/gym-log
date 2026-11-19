@@ -5,6 +5,7 @@ A simple workout tracker that runs in your phone's browser and can be added to y
 ## What it does
 
 - **Log**: date and time, type of training (Strength, Cardio, Swimming, Core, Flexibility, Class/other), exercise or machine from a drop-down, sets with weight (kg) and reps, duration/distance/calories/level for cardio, or lengths, pool length, stroke and time for swimming (distance is worked out for you), how it felt, and notes
+- **Copy a previous workout**: copies every exercise from an earlier day onto the day you have selected, ready to adjust
 - **"Last time" prompt**: pick an exercise and it shows what you did last time, with a button to copy those sets in
 - **Personal bests**: flagged automatically when you beat your heaviest weight (or longest distance for cardio)
 - **History**: every session grouped by day, filterable by exercise, with edit and delete
